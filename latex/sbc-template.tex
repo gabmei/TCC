@@ -1,0 +1,484 @@
+\documentclass[12pt]{article}
+
+\usepackage{sbc-template}
+
+\usepackage{graphicx,url}
+\usepackage[utf8]{inputenc}
+\usepackage[brazilian]{babel}
+\usepackage{csquotes}
+\usepackage[style=numeric, backend=biber]{biblatex}
+\usepackage{tikz}
+\usepackage{amsmath}
+
+\addbibresource{sbc-template.bib}
+\setlength{\bibitemsep}{6pt}
+     
+\sloppy
+
+\title{Linearização de Dados Espaço-Temporais \\ Implementação e Avaliação
+de Curvas de Preenchimento de Espaço Guiadas por Dados}
+
+\author{Gabriel de A. S. Meireles, Nivan R. F. Junior}
+
+\renewcommand{\inst}[1]{}
+
+\address{Centro de Informática \\
+Universidade Federal de Pernambuco (UFPE) -- Recife, PE -- Brazil
+  \email{\{gasm, nivan\}@cin.ufpe.br}
+}
+
+\begin{document} 
+
+\maketitle
+
+\begin{abstract}
+  % This meta-paper describes the style to be used in articles and short papers
+  % for SBC conferences. For papers in English, you should add just an abstract
+  % while for the papers in Portuguese, we also ask for an abstract in
+  % Portuguese (``resumo''). In both cases, abstracts should not have more than
+  % 10 lines and must be in the first page of the paper.
+\end{abstract}
+     
+\begin{resumo} 
+  % Este meta-artigo descreve o estilo a ser usado na confecção de artigos e
+  % resumos de artigos para publicação nos anais das conferências organizadas
+  % pela SBC. É solicitada a escrita de resumo e abstract apenas para os artigos
+  % escritos em português. Artigos em inglês deverão apresentar apenas abstract.
+  % Nos dois casos, o autor deve tomar cuidado para que o resumo (e o abstract)
+  % não ultrapassem 10 linhas cada, sendo que ambos devem estar na primeira
+  % página do artigo.
+\end{resumo}
+
+\section{Introdução}
+
+\section{Trabalhos Relacionados}
+
+\section{Metodologia}
+
+\subsection{Visão Geral}
+% -----------------------------------------------------------------------------------------------
+% -----------------------------------------------------------------------------------------------
+% -----------------------------------------------------------------------------------------------
+
+A abordagem proposta fundamenta-se na linearização de estruturas multidimensionais (2D ou 3D) em
+sequências unidimensionais (1D). Expandindo o conceito de curvas baseadas em contexto
+(\textit{Context-based Space-Filling Curves}) \cite{dafner:00}, utiliza-se a técnica de curvas de 
+preenchimento de espaço guiadas por dados (\textit{Data-Driven Space-Filling Curves}) \cite{zhou:20}.
+O núcleo do processamento estabelece um ciclo hamiltoniano que percorre integralmente a grade de pixels,
+com o objetivo de preservar simultaneamente a coerência espacial, referente a localidade geométrica do caminho,
+e a coerência dos dados, associada à localidade dos dados no caminho.
+
+Para viabilizar a implementação e a análise experimental, desenvolveu-se uma arquitetura de software
+híbrida entre C++ e Python. A metodologia trata imagens estáticas no formato $H \times W$ (2D) ou $H \times W \times C$ (3D).
+Analogamente, vídeos são processados como uma sequência de imagens estáticas do tipo $F \times H \times W$ ou $F \times H \times W \times C$,
+onde os parâmetros são definidos como:
+
+\begin{itemize}
+    \item $F$: quantidade de quadros do vídeo;
+    \item $H$: altura da imagem (número de linhas);
+    \item $W$: largura da imagem (número de colunas);
+    \item $C$: número de canais de cor.
+\end{itemize}
+
+O processamento de um vídeo ocorre, inicialmente, pela linearização independente de cada quadro.
+No entanto, curvas geradas de forma isolada para quadros consecutivos podem apresentar variações
+topológicas abruptas, prejudicando a coerência temporal. Para mitigar esse problema, o sistema implementa
+técnicas de alinhamento temporal, visando maximizar a correlação estrutural entre as curvas de frames
+adjacentes.
+
+Dessa forma, o trabalho atua em duas frentes principais:
+\begin{itemize}
+    \item \textbf{Imagens:} Implementação modular e reprodutível do método \textit{data-driven} descrito por Zhou et al. \cite{zhou:20} para grades regulares, visando a validação dos resultados teóricos;
+    \item \textbf{Vídeos:} Investigação e avaliação de técnicas de alinhamento entre quadros para garantir a coerência temporal após a linearização individual de cada quadro do vídeo.
+\end{itemize}
+
+\subsection{O método de linearização \textit{data-driven}}
+% -----------------------------------------------------------------------------------------------
+% -----------------------------------------------------------------------------------------------
+% -----------------------------------------------------------------------------------------------
+
+% Para entender como funciona o método \textit{data-driven}, é preciso avaliar o seu \textit{context-based} desenvolvido por
+% Dafner et al \cite{dafner:00}. A ideia central começa no mapeamento 1 para 1 da imagem para o seu dual através
+% da construção de pequenos circuitos como mostrado na figura \ref{fig:small_circuits}.
+
+A compreensão do método \textit{data-driven} requer a análise preliminar da abordagem (\textit{Context-based})
+proposta por Dafner et al. \cite{dafner:00}. O conceito central fundamenta-se no mapeamento da
+imagem original para o seu grafo dual, realizado através da construção de pequenos circuitos,
+conforme ilustrado na Figura \ref{fig:small_circuits}.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/small_circuits_context_based.PNG}
+    \caption{Pequenos circuitos de Dafner et al. \cite{dafner:00}}
+    \label{fig:small_circuits}
+\end{figure}
+
+% Após esse mapeamento, é perceptível que uma arvóre no grafo dual equivale a um ciclo hamiltoniano no grafo
+% original. Dessa maneira, queremos uma função de peso entre os nós no grafo dual que leve em conta os próprios
+% pixels da imagem também evidenciado na figura \ref{fig:small_circuits}. Com isso, é possível construir uma árvore
+% geradora mínima no grafo dual para então recuperar o ciclo hamiltoniano no grafo original. Em específico, foi adotado
+% o algoritmo de Prim.
+
+Após esse mapeamento, observa-se que uma árvore geradora no grafo dual equivale a um ciclo hamiltoniano no grafo
+original. Dessa forma, busca-se definir uma função de peso para as arestas do grafo dual que considere os valores
+dos pixels da imagem. A partir dessa ponderação, constrói-se uma Árvore Geradora Mínima (MST)
+no grafo dual para, subsequentemente, recuperar o ciclo hamiltoniano no grafo original. Nesta implementação, adotou-se o
+algoritmo de Prim para a construção da MST.
+
+% A função proposta originalmente está descrito na equação \ref{eq:1}. Na equação, temos que o custo de de uma aresta
+% $W{(C_{i},C_{j})}$ representa o custo de adicionar o vértice $C_{j}$ à árvore geradora mínima em construção
+% cujo vertíce $C_{i}$ pertence a ela. Além disso, cada peso na equação \ref{eq:1} representam arestas no grafo original
+% e o peso de uma aresta é definido como a diferença entre seus extremos. Dafner et al \cite{dafner:00} define para uma aresta
+% $e = (a, b)$, $w(e) = |a - b|$ e, para imagens com mais canais de cor, como imagens RGB, 
+% $w(e) = |a_{red} - b_{red}| + |a_{green} - b_{green}| + |a_{blue} - b_{blue}|$.
+% Os valores descritos na equação \ref{eq:1} podem ser melhor interpretados com a figura \ref{fig:context_weight}.
+
+A função de custo originalmente proposta é descrita na Equação \ref{eq:1}. 
+Nela, $W(C_{i}, C_{j})$ representa o custo de conectar o vértice $C_{j}$ à árvore geradora, 
+partindo de um vértice $C_{i}$ já pertencente a ela. As variáveis da equação $(u, w, x, y, z, e, f)$ 
+correspondem aos pesos das arestas no grafo original (ver Figura \ref{fig:context_weight}). 
+O peso de cada aresta é definido pela diferença absoluta entre os valores dos pixels em seus extremos. 
+Segundo Dafner et al. \cite{dafner:00}, para uma aresta $e=(a, b)$, tem-se $w(e)=|a - b|$. 
+Para imagens coloridas (RGB), a diferença é a soma das diferenças absolutas de cada canal: 
+$w(e) = \sum_{k \in \{R,G,B\}} |a_k - b_k|$.
+
+% Dessa maneira, a abordagem \textit{context-based} gera linearizações que tentam maximizar a coerência de dados próximos.
+% Contudo, é um método que não considera a coerência espacial em sua construção. A abordagem \textit{data-driven}, por sua vez,
+% atinge isso pela introdução de uma nova função de custo enquanto aproveita de todos os demais conceitos utilizados pelo
+% artigo original \cite{dafner:00}.
+
+Dessa maneira, a abordagem \textit{context-based} gera linearizações que priorizam a coerência dos dados. 
+Contudo, este método não considera explicitamente a coerência espacial durante a construção da curva.
+A abordagem \textit{data-driven}, detalhada por Zhou et al. \cite{zhou:20}, soluciona essa limitação
+introduzindo uma nova função de custo composta, preservando, no entanto, a estrutura fundamental
+de mapeamento dual e MST proposta no artigo original \cite{dafner:00}.
+
+A abordagem \textit{data-driven}, conforme proposto em \cite{zhou:20} utiliza a função de custo
+ponderada descrita na Equação \ref{eq:2}. Os componentes da equação são definidos como:
+
+% \begin{itemize}
+%   \item $N(C_i, C_j)$: a mesma função de custo de Dafner et al \cite{dafner:00} destacada em \ref{eq:1};
+%   \item $R_{\beta}(C_j)$: a distância geométrica entre $C_j$ e o o seu centro $S_{C_j}$, i.e, $||(Cj.x,Cj.y) - (S_{C_j}.x, S_{C_j}.y)||$;
+%   \item $\alpha$: peso percentual representando quanto a execução do algoritmo vai levar em conta a correlação espacial do caminho.
+%   Quanto maior, mais o algoritmo vai levar em conta a correlação espacial e menos a correlação dos dados;
+%   \item $\beta$: Número inteiro representando que, no gráfico dual, os blocos estão definidos em tamanho $\beta \times \beta$.
+%   Quanto maior, mais contido em blocos vai ser o caminho hamiltoniano encontrado.
+% \end{itemize}
+\begin{itemize} 
+    \item \textbf{$N(C_i, C_j)$:} Custo baseado na coerência dos dados, idêntico à função de Dafner et al. \cite{dafner:00} (Equação \ref{eq:1});
+    
+    \item \textbf{$R_{\beta}(C_j)$:} Custo baseado na coerência espacial, definido pela distância euclidiana entre a célula $C_j$
+    e o seu centróide $S_{C_j}$, i.e., $||C_j - S_{C_j}||$;
+    
+    \item \textbf{$\alpha \in [0,1]$:} Fator de ponderação. Valores menores de $\alpha$ priorizam a similaridade dos dados,
+    enquanto valores maiores priorizam a regularidade espacial do caminho;
+    
+    \item \textbf{$\beta$:} Inteiro que define a dimensão $\beta \times \beta$ dos blocos no grafo dual,
+    determinando a posição dos centroides $S_{C_j}$ no centro de cada bloco. 
+    Experimentalmente, valores elevados de $\beta$ tendem a confinar o ciclo hamiltoniano dentro de cada bloco
+    antes de permitir a transição para regiões vizinhas.
+\end{itemize}
+
+% Na implementação feita por mim, $\alpha$ e $\beta$ são hiperparâmetros que podem ser fácilmente 
+% alterados e configurados. A relação entre os fatores $N(C_i, C_j)$, $R_{\beta}(C_j)$ e $S_{C_j}$ pode
+% ser entendida na figura \ref{fig:data_driven_weight}.
+
+Na implementação desenvolvida neste trabalho, $\alpha$ e $\beta$ foram definidos 
+como hiperparâmetros configuráveis, permitindo o ajuste fino do comportamento da 
+curva e a análise do impacto que a variação desses parâmetros exerce sobre a 
+topologia final. A relação geométrica e estrutural entre os custos de dados 
+$N(C_{i}, C_{j})$ e espacial $R_{\beta}(C_{j})$ é ilustrada na Figura \ref{fig:data_driven_weight}.
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.35\textwidth]{images/weight_values_context_based.PNG}
+    \caption{Pesos da função proposta de Dafner et al. \cite{dafner:00}}
+    \label{fig:context_weight}
+\end{figure}
+
+\begin{equation} \label{eq:1}
+    W{(C_{i},C_{j})} = |u| + |w| + |x| + |y| + |z| - |e| - |f|
+\end{equation}
+
+\begin{equation} \label{eq:2}
+    W{(C_{i},C_{j})} = (1 - \alpha) N(C_i, C_j) + \alpha R_{\beta}(C_j)
+\end{equation}
+
+
+\begin{figure}[h]
+    \centering
+    \begin{tikzpicture}[scale=1.5]
+
+        % Linha Divisória Vertical
+        \draw[gray, thick, dash dot] (3.5, 3.5) -- (3.5, 7.5);
+
+        % Grid de pontos
+        \foreach \x in {0,...,7} {
+            \foreach \y in {4,...,7} {
+                \ifnum\x=3 \ifnum\y=5 \else \fill[black] (\x, \y) circle (2.5pt); \fi
+                \else 
+                    \ifnum\x=4 \ifnum\y=5 \else \fill[black] (\x, \y) circle (2.5pt); \fi
+                    \else \fill[black] (\x, \y) circle (2.5pt); 
+                    \fi
+                \fi
+            }
+        }
+
+        % Quadrados Azuis
+        \node[rectangle, fill=blue, inner sep=0pt, minimum size=5pt] (Si) at (1.5, 5.5) {};
+        \node[blue, font=\scriptsize, left=2pt] at (Si) {$S_{C_i}$};
+
+        \node[rectangle, fill=blue, inner sep=0pt, minimum size=5pt] (Sj) at (5.5, 5.5) {};
+        \node[blue, font=\scriptsize, right=2pt] at (Sj) {$S_{C_j}$};
+
+
+        % Linha N(Ci, Cj)
+        \draw[red, thick, dotted] (3, 5) -- (4, 5) 
+            node[midway, above, font=\scriptsize, yshift=3pt, fill=white, inner sep=1pt] {$N(C_i, C_j)$};
+
+        % Linha R_beta(Cj)
+        \draw[blue, thick, dotted] (4, 5) -- (5.5, 5.5) 
+            node[midway, sloped, above, font=\scriptsize, text=blue, yshift=2pt] {$R_{\beta}(C_j)$};
+
+
+        % Pontos Vermelhos Ci e Cj
+        \fill[red] (3, 5) circle (3pt); 
+        \node[red, font=\scriptsize, below left] at (3, 5) {$C_i$};
+
+        \fill[red] (4, 5) circle (3pt);
+        \node[red, font=\scriptsize, below right] at (4, 5) {$C_j$};
+
+    \end{tikzpicture}
+    \caption{Representação das relações no grafo dual: o custo de dados $N(C_i, C_j)$ e o custo espacial $R_{\beta}(C_j)$.}
+    \label{fig:data_driven_weight}
+\end{figure}
+
+\subsection{Técnicas de Alinhamento Temporal} 
+% -----------------------------------------------------------------------------------------------
+% -----------------------------------------------------------------------------------------------
+% -----------------------------------------------------------------------------------------------
+
+Entre dois quadros consecutivos, por mais semelhantes que sejam, pequenas variações nos valores dos pixels podem
+resultar em linearizações bem distintas. Esse fenômeno prejudica a análise da evolução temporal dos dados, pois
+quebra visualmente a continuidade entre os quadros. Para mitigar essa instabilidade e promover a coerência
+temporal na visualização, este trabalho explora duas técnicas de alinhamento. O método fundamenta-se na propriedade
+de que qualquer rotação cíclica ou inversão de sentido de um ciclo hamiltoniano constitui também uma representação válida
+de uma curva que cobre integralmente a imagem.
+
+% Dessa maneira, em cada direção, buscamos achar a rotação que minimize uma função de custo objetiva como destacado 
+% na Equação \ref{eq:all_alignments}. Nesse trabalho, para cada possível rotação, nesse trabalho foi explorado dois
+% tipos de funções objetivas $g$ destacas em \ref{eq:alignment_general}. Em ambos os casos, são funções facilmente
+% expandíveis para imagens com vários canais de cor.
+
+Dessa maneira, o problema de alinhamento consiste em encontrar, para o quadro atual, a rotação e a direção que minimizem
+uma função de custo objetiva em relação ao quadro anterior. Esse problema pode ser expresso como uma busca pelos 
+parâmetros ótimos definidos na Equação \ref{eq:all_alignments}. A função $f$ presente nela é definida na Equação \ref{eq:alignment_general}.
+Todos os parâmetros e seus significados são explicados a seguir:
+
+\begin{itemize}
+  \item $N$: Tamanho do vetor da imagem linearizada;
+  \item $s$: Índice do \textit{cyclic shift} aplicado ao vetor;
+  \item $\sigma$: Número binário que indica se o vetor foi invertido ou não;
+  \item $V_{t-1} \text{ e } V_t$: Vetores linearizados do quadro anterior e do atual;
+  \item $f$: Função de custo global que quantifica a dissimilaridade total entre duas sequências;
+  \item $g$: Função de custo local aplicada elemento a elemento. 
+\end{itemize}
+
+
+\begin{equation} \label{eq:all_alignments}
+    (s^*, \sigma^*) = \operatorname*{arg\,min}_{\substack{s \in [0, N-1] \\ \sigma \in \{0, 1\}}} f_\sigma(s)
+\end{equation}
+
+\begin{equation} \label{eq:alignment_general} 
+  f_\sigma(s) = \sum_{i=0}^{N-1} g\Big(V_{t-1}[i], \ V_{\sigma, t}[(i + s)_{\bmod N}]\Big)
+\end{equation}
+
+
+
+Neste trabalho, foram avaliadas duas métricas distintas para a função g: a \textit{L1-norm} e a \textit{L2-norm}.
+Para ambas, são funções facilmente extensíveis para imagens com múltiplos canais.
+
+\subsubsection{\textit{L1-norm}}
+% Explicar a função g para L1-norm e tempo de complexidade
+Nesta abordagem, a métrica local $g$ é a diferença absoluta, conforme a Equação \ref{eq:l1_cost}.
+Essa escolha mantém a consistência com a função de custo utilizada na construção da MST durante o algoritmo de Prim.
+Para imagens com múltiplos canais, a função é generalizada
+pelo somatório das diferenças em cada canal $c$, correspondendo à distância de Manhattan como
+destacado na Equação \ref{eq:l1_cost_channels}.
+
+\begin{equation} \label{eq:l1_cost}
+    g(a, b) = |a - b|
+\end{equation}
+
+\begin{equation} \label{eq:l1_cost_channels}
+    g(a, b) = \sum_{c}|a_c - b_c|
+\end{equation}
+
+Devido ao uso do módulo, a busca pela configuração ótima nesta estratégia ocorre de maneira exaustiva.
+Visto que para cada possível deslocamento é necessário computar a diferença em todos os pixels e canais,
+a complexidade resultante é $O(C \cdot N^2)$, onde $C$ é o número de canais.
+
+\subsubsection{\textit{L2-norm}}
+% Explicar a função g para L2-norm e tempo de complexidade
+Nesta abordagem, a métrica local $g$ é o quadrado da diferença, conforme a Equação \ref{eq:l2_cost}.
+Similarmente, essa função pode ser generalizada para imagens com múltiplos canais como apresentado na
+Equação \ref{eq:l2_cost_channels}.
+
+\begin{equation} \label{eq:l2_cost}
+    g(a, b) = (a - b)^2
+\end{equation}
+
+\begin{equation} \label{eq:l2_cost_channels}
+    g(a, b) = \sum_{c}(a_c - b_c)^2
+\end{equation}
+
+Essa formulação permite expandir o termo quadrático da função global que se deseja minimizar e
+alcançar propriedades algébricas interessantes, como demonstrado na Equação \ref{eq:l2_expansion}:
+
+\begin{equation} \label{eq:l2_expansion}
+\begin{aligned}
+    f_\sigma(s) &= \sum_{i=0}^{N-1} \Big(V_{t-1}[i] - V_{\sigma, t}[(i + s) \bmod N]\Big)^2 \\
+                &= \sum_{i=0}^{N-1} V_{t-1}[i]^2 + \sum_{i=0}^{N-1} V_{\sigma, t}[(i + s) \bmod N]^2 - 2 \sum_{i=0}^{N-1} V_{t-1}[i] V_{\sigma, t}[(i + s) \bmod N] \\
+                &= \sum_{i=0}^{N-1} V_{t-1}[i]^2 + \sum_{i=0}^{N-1} V_{t}[i]^2 - 2 \underbrace{\sum_{i=0}^{N-1} V_{t-1}[i] V_{\sigma, t}[(i + s) \bmod N]}_{\text{correlação cruzada circular}} \\
+\end{aligned}
+\end{equation}
+
+Dessa maneira, observa-se que, para alcançar o mínimo de $f_\sigma$, é preciso encontrar os valores
+de $s$ e $\sigma$ que maximizem a correlação cruzada circular \cite{wang:19}, uma vez que os termos de soma quadrática 
+são constantes e independem da rotação e da direção. Essa propriedade é fundamental pois, dado 
+um $\sigma \in \{0, 1\}$, a correlação pode ser calculada para todo valor de $s$ simultaneamente
+utilizando a Transformada Rápida de Fourier (FFT) em $O(N \log N)$. Como existem apenas duas
+orientações possíveis para $\sigma$, a complexidade assintótica se mantém. Assim, a complexidade
+final alcançada é $O(C \cdot N \log N)$, tal que $C$ é o número de canais.
+
+\subsection{Detalhes de Implementação}
+% -----------------------------------------------------------------------------------------------
+% -----------------------------------------------------------------------------------------------
+% -----------------------------------------------------------------------------------------------
+
+Visando alto desempenho computacional, o núcleo de processamento numérico foi implementado inteiramente em C++20.
+Para garantir interoperabilidade e facilitar a análise exploratória, as funcionalidades foram expostas ao ambiente
+Python utilizando a biblioteca \texttt{Pybind11}, que atua como uma camada de integração leve.
+
+O ambiente de validação experimental foi construído sobre \textit{Jupyter Notebooks}, permitindo prototipagem
+rápida e visualização imediata dos resultados. Essa estrutura permitiu avaliar como a variação dos hiperparâmetros
+impacta o tempo de execução, a correlação entre quadros e a qualidade visual das curvas geradas.
+
+O código-fonte desenvolvido encontra-se disponível publicamente no repositório: \url{https://github.com/gabmei/TCC}.
+
+\section{Experimentos}
+
+\section{Conclusão}
+
+% \section{General Information}
+
+% All full papers and posters (short papers) submitted to some SBC conference,
+% including any supporting documents, should be written in English or in
+% Portuguese. The format paper should be A4 with single column, 3.5 cm for upper
+% margin, 2.5 cm for bottom margin and 3.0 cm for lateral margins, without
+% headers or footers. The main font must be Times, 12 point nominal size, with 6
+% points of space before each paragraph. Page numbers must be suppressed.
+
+% Full papers must respect the page limits defined by the conference.
+% Conferences that publish just abstracts ask for \textbf{one}-page texts.
+
+% \section{First Page} \label{sec:firstpage}
+
+% The first page must display the paper title, the name and address of the
+% authors, the abstract in English and ``resumo'' in Portuguese (``resumos'' are
+% required only for papers written in Portuguese). The title must be centered
+% over the whole page, in 16 point boldface font and with 12 points of space
+% before itself. Author names must be centered in 12 point font, bold, all of
+% them disposed in the same line, separated by commas and with 12 points of
+% space after the title. Addresses must be centered in 12 point font, also with
+% 12 points of space after the authors' names. E-mail addresses should be
+% written using font Courier New, 10 point nominal size, with 6 points of space
+% before and 6 points of space after.
+
+% The abstract and ``resumo'' (if is the case) must be in 12 point Times font,
+% indented 0.8cm on both sides. The word \textbf{Abstract} and \textbf{Resumo},
+% should be written in boldface and must precede the text.
+
+% \section{CD-ROMs and Printed Proceedings}
+
+% In some conferences, the papers are published on CD-ROM while only the
+% abstract is published in the printed Proceedings. In this case, authors are
+% invited to prepare two final versions of the paper. One, complete, to be
+% published on the CD and the other, containing only the first page, with
+% abstract and ``resumo'' (for papers in Portuguese).
+
+% \section{Sections and Paragraphs}
+
+% Section titles must be in boldface, 13pt, flush left. There should be an extra
+% 12 pt of space before each title. Section numbering is optional. The first
+% paragraph of each section should not be indented, while the first lines of
+% subsequent paragraphs should be indented by 1.27 cm.
+
+% \subsection{Subsections}
+
+% The subsection titles must be in boldface, 12pt, flush left.
+
+% \section{Figures and Captions}\label{sec:figs}
+
+
+% Figure and table captions should be centered if less than one line
+% (Figure~\ref{fig:exampleFig1}), otherwise justified and indented by 0.8cm on
+% both margins, as shown in Figure~\ref{fig:exampleFig2}. The caption font must
+% be Helvetica, 10 point, boldface, with 6 points of space before and after each
+% caption.
+
+% \begin{figure}[ht]
+% \centering
+% \includegraphics[width=.5\textwidth]{fig1.jpg}
+% \caption{A typical figure}
+% \label{fig:exampleFig1}
+% \end{figure}
+
+% \begin{figure}[ht]
+% \centering
+% \includegraphics[width=.3\textwidth]{fig2.jpg}
+% \caption{This figure is an example of a figure caption taking more than one
+%   line and justified considering margins mentioned in Section~\ref{sec:figs}.}
+% \label{fig:exampleFig2}
+% \end{figure}
+
+% In tables, try to avoid the use of colored or shaded backgrounds, and avoid
+% thick, doubled, or unnecessary framing lines. When reporting empirical data,
+% do not use more decimal digits than warranted by their precision and
+% reproducibility. Table caption must be placed before the table (see Table 1)
+% and the font used must also be Helvetica, 10 point, boldface, with 6 points of
+% space before and after each caption.
+
+% \begin{table}[ht]
+% \centering
+% \caption{Variables to be considered on the evaluation of interaction
+%   techniques}
+% \label{tab:exTable1}
+% \includegraphics[width=.7\textwidth]{table.jpg}
+% \end{table}
+
+% \section{Images}
+
+% All images and illustrations should be in black-and-white, or gray tones,
+% excepting for the papers that will be electronically available (on CD-ROMs,
+% internet, etc.). The image resolution on paper should be about 600 dpi for
+% black-and-white images, and 150-300 dpi for grayscale images.  Do not include
+% images with excessive resolution, as they may take hours to print, without any
+% visible difference in the result. 
+
+% \section{References}
+
+% Bibliographic references must be unambiguous and uniform.  We recommend giving
+% the author names references in brackets, e.g. \cite{knuth:84},
+% \cite{boulic:91}, and \cite{smith:99}.
+
+% The references must be listed using 12 point font size, with 6 points of space
+% before each reference. The first line of each reference should not be
+% indented, while the subsequent should be indented by 0.5 cm.
+
+\printbibliography
+% \bibliographystyle{sbc}
+% \bibliography{sbc-template}
+
+\end{document}
