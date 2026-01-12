@@ -6,12 +6,17 @@
 \usepackage[utf8]{inputenc}
 \usepackage[brazilian]{babel}
 \usepackage{csquotes}
+
 \usepackage{tikz}
 \usepackage{amsmath}
+\usepackage{subcaption}
+\usepackage{placeins}
+\usepackage{array}
+\usepackage[export]{adjustbox}
 
-%% \usepackage[style=numeric, backend=biber]{biblatex}
-%% \addbibresource{sbc-template.bib}
-%% \setlength{\bibitemsep}{6pt}
+\usepackage[style=numeric, backend=biber]{biblatex}
+\addbibresource{sbc-template.bib}
+\setlength{\bibitemsep}{6pt}
      
 \sloppy
 
@@ -168,14 +173,14 @@ ponderada descrita na Equação \ref{eq:2}. Os componentes da equação são def
     \item \textbf{$N(C_i, C_j)$:} Custo baseado na coerência dos dados, idêntico à função de Dafner et al. \cite{dafner:00} (Equação \ref{eq:1});
     
     \item \textbf{$R_{\beta}(C_j)$:} Custo baseado na coerência espacial, definido pela distância euclidiana entre a célula $C_j$
-    e o seu centróide $S_{C_j}$, i.e., $||C_j - S_{C_j}||$;
+    e o seu centróide $S_{C_j}$, \textit{i.e}., $||C_j - S_{C_j}||$;
     
     \item \textbf{$\alpha \in [0,1]$:} Fator de ponderação. Valores menores de $\alpha$ priorizam a similaridade dos dados,
     enquanto valores maiores priorizam a regularidade espacial do caminho;
     
     \item \textbf{$\beta$:} Inteiro que define a dimensão $\beta \times \beta$ dos blocos no grafo dual,
     determinando a posição dos centroides $S_{C_j}$ no centro de cada bloco. 
-    Experimentalmente, valores elevados de $\beta$ tendem a confinar o ciclo hamiltoniano dentro de cada bloco
+    Experimentalmente, valores elevados de $\alpha$ tendem a confinar o ciclo hamiltoniano dentro de cada bloco
     antes de permitir a transição para regiões vizinhas.
 \end{itemize}
 
@@ -186,7 +191,7 @@ ponderada descrita na Equação \ref{eq:2}. Os componentes da equação são def
 Na implementação desenvolvida neste trabalho, $\alpha$ e $\beta$ foram definidos 
 como hiperparâmetros configuráveis, permitindo o ajuste fino do comportamento da 
 curva e a análise do impacto que a variação desses parâmetros exerce sobre a 
-topologia final. A relação geométrica e estrutural entre os custos de dados 
+preenchimento resultante. A relação geométrica e estrutural entre os custos de dados 
 $N(C_{i}, C_{j})$ e espacial $R_{\beta}(C_{j})$ é ilustrada na Figura \ref{fig:data_driven_weight}.
 
 
@@ -368,7 +373,777 @@ impacta o tempo de execução, a correlação entre quadros e a qualidade visual
 O código-fonte desenvolvido encontra-se disponível publicamente no repositório: \url{https://github.com/gabmei/TCC}.
 
 \section{Experimentos}
+% -----------------------------------------------------------------------------------------------
+% -----------------------------------------------------------------------------------------------
+% -----------------------------------------------------------------------------------------------
 
+
+\subsection{Ambiente Computacional}
+% Todos os testes foram feitos em um computador de uso pessoal, com processador Intel Core i5-9300H 2.40,
+% 16 GB de memória RAM e armazenamento em SSD Samsung 980 PRO. Os testes foram executados dentro de um ambiente
+% virtual venv, executando dentro do Subsistema Windows para Linux (WSL2). É importante frizar que o WSL2 só possuia
+% 8 GB de memória RAM disponível e os experimentos não fizeram uso de nenhuma técnica de paralelismo. Dessa forma
+% garantindo que as métricas de tempo refletem a complexidade do algoritmo.
+
+Todos os testes foram realizados em um computador de uso pessoal, equipado com processador Intel Core
+i5-9300H 2.40 GHz, 16 GB de memória RAM e armazenamento em SSD Samsung 980 PRO. A implementação foi
+executada em um ambiente virtual (venv) operando dentro do Subsistema Windows para Linux (WSL2). 
+
+É importante ressaltar que o ambiente WSL2 dispunha de apenas 8 GB de memória RAM e os experimentos não
+fizeram uso de técnicas de paralelismo. Essa restrição assegura que as métricas de tempo coletadas reflitam
+estritamente a complexidade algorítmica.
+
+\subsection{Conjuntos de Dados}
+Para a validação experimental, foi selecionado um conjunto diversificado de dados, provenientes de três fontes distintas.
+Ressalta-se que, para garantir a consistência nos experimentos, todos os dados foram normalizados
+para valores em ponto flutuante no intervalo $[0.0, 1.0]$.
+
+\subsubsection{Volumes do \textit{Open Scientific Visualization Datasets}}
+Para a validação experimental, foram utilizados diversos volumes de dados disponíveis na coleção
+\textit{Open Scientific Visualization Datasets} \cite{klacansky:osvd}, amplamente adotada na literatura,
+incluindo datasets usaods por Köpp e Weinkauf \cite{KoeppWeinkauf2022_TMTM} e por Zhou et al. \cite{zhou:20}
+em seus respectivos trabalhos.
+As especificações técnicas destes volumes encontram-se na Tabela \ref{tab:openscivis}.
+Cortes transversais ao longo do eixo $z$ também são apresentados na Figura \ref{fig:openscivis_slices}, destacando
+a diversidade dos dados.
+
+
+\begin{table}[h]
+\centering
+\caption{Conjuntos de dados do \textit{Open SciVis}.}
+\label{tab:openscivis}
+\begin{tabular}{lrr}
+\hline
+\textbf{Dataset} & \textbf{Dimensões} & \textbf{Formato} \\ \hline
+Bonsai           & $256 \times 256 \times 256$                & uint8       \\
+Carp             & $256 \times 256 \times 512$                & uint16      \\ 
+Engine           & $256 \times 256 \times 128$                & uint8       \\
+Frog             & $256 \times 256 \times  44$                & uint8       \\
+Head MRI CISS    & $256 \times 256 \times 124$                & uint8       \\
+Nucleon          & $41  \times  41 \times  41$                & uint8       \\ 
+\hline
+\end{tabular}
+\end{table}
+
+
+\begin{figure}[ht]
+    \centering
+    % --- Wrapper (Envelope) para reduzir o tamanho total ---
+    % Mude 0.9 para 0.8 se quiser ainda menor
+    \begin{minipage}{0.9\textwidth} 
+        \centering
+        
+        % --- Primeira Linha ---
+        \begin{subfigure}[b]{0.29\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{images/bonsai_slice.png}
+            \caption{Bonsai}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.29\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{images/carp_slice.png}
+            \caption{Carp}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.29\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{images/engine_slice.png}
+            \caption{Engine}
+        \end{subfigure}
+        
+        \vspace{0.5cm} % Espaço entre as linhas
+        
+        % --- Segunda Linha ---
+        \begin{subfigure}[b]{0.29\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{images/frog_slice.png}
+            \caption{Frog}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.29\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{images/mri_slice.png} 
+            \caption{Head MRI}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.29\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{images/nucleon_slice.png}
+            \caption{Nucleon}
+        \end{subfigure}
+        
+    \end{minipage} % Fim do wrapper
+    
+    \caption{Cortes transversais dos datasets utilizados nos experimentos, obtidos do repositório Open SciVis \cite{klacansky:osvd}.}
+    \label{fig:openscivis_slices}
+\end{figure}
+
+\subsubsection{Imagens de Teste}
+Para a validação do método em imagens estáticas, foram adotadas as figuras sintéticas propostas por
+Köpp e Weinkauf \cite{KoeppWeinkauf2022_TMTM}. Estes dados possuem dimensões $128 \times 128$ com
+valores em ponto flutuante. Neste trabalho, tais imagens foram utilizadas para testar como diferentes distribuições de dados
+influenciam o comportamento da curva e como a variação de hiperparâmetros afeta o padrão de preenchimento resultante.
+A Figura \ref{fig:koepp_images} ilustra esses padrões.
+
+
+\begin{figure}[ht]
+    \centering
+    \captionsetup[subfigure]{font=scriptsize, justification=centering}
+    
+    % --- Imagem 1 ---
+    \begin{subfigure}[t]{0.24\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/koepp_normal.png}
+        % Dica: Se ainda quebrar feio, force a quebra manual com \\
+        \caption{Normal distribution} 
+    \end{subfigure}%
+    \hfill
+    % --- Imagem 2 ---
+    \begin{subfigure}[t]{0.24\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/koepp_delta.png}
+        \caption{Delta sequence}
+    \end{subfigure}%
+    \hfill
+    % --- Imagem 3 ---
+    \begin{subfigure}[t]{0.24\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/koepp_three.png}
+        \caption{Three features}
+    \end{subfigure}%
+    \hfill
+    % --- Imagem 4 ---
+    \begin{subfigure}[t]{0.24\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/koepp_skew.png}
+        \caption{Skew normal distribution}
+    \end{subfigure}
+    
+    \caption{Imagens de teste de Köpp e Weinkauf \cite{KoeppWeinkauf2022_TMTM}}
+    \label{fig:koepp_images}
+\end{figure}
+
+\FloatBarrier
+\subsubsection{Animações Geradas}
+% Para os experimentos espaço-temporais, foram gerados datasets sintéticos especificamente para
+% este trabalho. Esses dados são representam animações de objetos em diferentes cenários. Cada animação
+% é descrita a seguir:
+
+Para os experimentos espaço-temporais, foram gerados conjuntos de dados sintéticos especificamente para este
+trabalho, representando animações de objetos em diferentes cenários. Cada animação é composta por $60$ quadros
+com resolução de $128 \times 128$ pixels, possuindo dimensão total $128 \times 128 \times 60$. A Figura \ref{fig:moving_frames} apresenta
+quadros selecionados destas animações. Os cenários são descritos a seguir:
+
+\begin{itemize}
+  \item \textbf{Distribuição normal:} Uma distribuição normal em movimento diagonal, cuja intensidade surge e desaparece gradativamente;
+  \item \textbf{Duas distribuições:} Duas distribuições normais, sendo uma estática de maior porte e outra menor em movimento diagonal, também com variação gradativa de intensidade;
+  \item \textbf{Anel em expansão:} Um anel que cresce gradativamente em raio e intensidade. Este experimento replica o cenário proposto por Franke et al. \cite{franke:21} e utilizado por Köpp e Weinkauf \cite{KoeppWeinkauf2022_TMTM}.
+\end{itemize}
+
+\begin{figure}[ht]
+    \centering
+    
+    % --- LINHA 1 ---
+    \begin{subfigure}[b]{0.7\textwidth} 
+        \centering
+        \includegraphics[width=0.32\textwidth]{images/moving_normal_0.png}
+        \hfill
+        \includegraphics[width=0.32\textwidth]{images/moving_normal_1.png}
+        \hfill
+        \includegraphics[width=0.32\textwidth]{images/moving_normal_2.png}
+        \caption{Distribuição normal} % Removido "em movimento..."
+        \label{subfig:moving_normal}
+    \end{subfigure}
+    
+    \vspace{0.3cm} % Ajustei levemente o espaço
+    
+    % --- LINHA 2 ---
+    \begin{subfigure}[b]{0.7\textwidth}
+        \centering
+        \includegraphics[width=0.32\textwidth]{images/moving_normal_two_0.png}
+        \hfill
+        \includegraphics[width=0.32\textwidth]{images/moving_normal_two_1.png}
+        \hfill
+        \includegraphics[width=0.32\textwidth]{images/moving_normal_two_2.png}
+        \caption{Duas distribuições}
+        \label{subfig:moving_two}
+    \end{subfigure}
+    
+    \vspace{0.3cm}
+    
+    % --- LINHA 3 ---
+    \begin{subfigure}[b]{0.7\textwidth}
+        \centering
+        \includegraphics[width=0.32\textwidth]{images/expanding_ring_0.png}
+        \hfill
+        \includegraphics[width=0.32\textwidth]{images/expanding_ring_1.png}
+        \hfill
+        \includegraphics[width=0.32\textwidth]{images/expanding_ring_2.png}
+        \caption{Anel em expansão}
+        \label{subfig:expanding_ring}
+    \end{subfigure}
+    
+    \caption{Evolução temporal das animações sintéticas geradas.}
+    \label{fig:moving_frames}
+\end{figure}
+
+\FloatBarrier
+\subsection{Avaliação de Linearização}
+
+% Para avaliar como a implementação data-driven se comporta ao variar seus hiperparâmetros e comparar com outras
+% curvas de preenchimento, foi adotado a imagem Nucleon
+% presente na Figura \ref{fig:openscivis_slices} (f), imagem usada na literatura para testes similares por tanto Zhou et al.
+% \cite{zhou:20} quanto Köpp e Weinkauf \cite{KoeppWeinkauf2022_TMTM}.
+
+Inicialmente, avalia-se a abordagem proposta em comparação com curvas de preenchimento estabelecidas na
+literatura, especificamente \textit{Hilbert}, \textit{Scanline} e \textit{Context-based}. Para este comparativo, foi adotada a
+imagem \textit{Nucleon} da Figura \ref{fig:openscivis_slices}(f), um dataset de referência frequentemente utilizado
+para validação de linearizações em trabalhos correlatos, como os de Zhou et al. \cite{zhou:20} e Köpp e
+Weinkauf \cite{KoeppWeinkauf2022_TMTM}.
+
+% Depois, é realizado a linearização das imagens presentes na Figura \ref{fig:koepp_images} e para ver visualmente quão
+% sensível é a implementação data-driven ao alterar seus hiperparâmetros.
+
+Em seguida, analisa-se a sensibilidade da implementação \textit{data-driven} à variação de seus hiperparâmetros.
+Esse estudo é conduzido sobre os padrões sintéticos apresentados na Figura \ref{fig:koepp_images},
+o que permite a inspeção visual das alterações no padrão de preenchimento resultantes de diferentes configurações.
+
+% Por fim, é replicado os testes criados por Zhou et al. \cite{zhou:20} que calculam a média da autocorrelação de
+% duas métricas de forma a analizar seu desempenho. A média da autocorrelação definida em por Zhou et al. em seu artigo
+% é um gráfico que no eixo x tem-se o \textit{lag} e no eixo y tem-se a média da correlação dos lags entre -lags até +lags.
+% As duas métricas adotadas são:
+
+
+Por fim, replicam-se os testes estabelecidos por Zhou et al. \cite{zhou:20}, calculando-se a média da
+autocorrelação normalizada de duas métricas para analisar o desempenho das curvas. A normalização dos
+dados assegura que a correlação varie no intervalo $[-1, +1]$, o que possibilita a comparação justa entre diferentes datasets.
+
+A métrica de média definida pelos autores consiste em um gráfico onde o eixo $x$ representa o \textit{lag} e
+o eixo $y$ exibe a média dos valores de correlação computados na janela de $-lag$ a $+lag$. As métricas adotadas são:
+
+\begin{itemize}
+ \item \textbf{Média Autocorrelação de Dados:} Considera a sequência das intensidades da linearização, \textit{i.e}, $s(i) = image(P(i).x, P(i).y)$; 
+ \item \textbf{Média Autocorrelação Radial:} Considera a norma da posição espacial na linearização, \textit{i.e}, $s(i) = ||(P(i).x, P(i).y)||$
+\end{itemize}
+
+\subsubsection{Comparativo Visual no Dataset Nucleon}
+
+\begin{figure}[htbp]
+    \centering
+    % --- COLUNA DA ESQUERDA: INPUT ---
+    \begin{minipage}[c]{0.13\textwidth}
+        \centering
+        \includegraphics[width=0.98\linewidth]{images/nucleon_comparison/nucleon_center_slice.png}
+        \par\vspace{5pt} 
+        \small{(a)}
+    \end{minipage}%
+    \hfill
+    % --- COLUNA DA DIREITA: OUTPUT MATRIZ ---
+    \begin{minipage}[c]{0.85\textwidth}
+        \centering
+        \setlength{\tabcolsep}{1pt} 
+        \renewcommand{\arraystretch}{0.5}
+        
+        \begin{tabular}{c c c c c}
+             % CABEÇALHO: Nomes completos e Data-Driven primeiro
+             & \tiny{\textbf{Data-Driven}} & \tiny{\textbf{Context-Base}} & \tiny{\textbf{Hilbert}} & \tiny{\textbf{Scanline}} \\
+            
+            % LINHA 1: Linearization (Trocando coluna 1 e 2)
+            \rotatebox{90}{\tiny{\textbf{(b) Linearização}}} &
+            \includegraphics[width=0.22\linewidth]{images/nucleon_comparison/data_driven_linearization.png} &
+            \includegraphics[width=0.22\linewidth]{images/nucleon_comparison/context_base_linearization.png} &
+            \includegraphics[width=0.22\linewidth]{images/nucleon_comparison/hilbert_linearization.png} &
+            \includegraphics[width=0.22\linewidth]{images/nucleon_comparison/scanline_linearization.png} \\
+            
+            % LINHA 2: Colormap (Trocando coluna 1 e 2)
+            \rotatebox{90}{\tiny{\textbf{(c) Colormap}}} &
+            \includegraphics[width=0.22\linewidth]{images/nucleon_comparison/data_driven_colormap.png} &
+            \includegraphics[width=0.22\linewidth]{images/nucleon_comparison/context_base_colormap.png} &
+            \includegraphics[width=0.22\linewidth]{images/nucleon_comparison/hilbert_colormap.png} &
+            \includegraphics[width=0.22\linewidth]{images/nucleon_comparison/scanline_colormap.png} \\
+            
+            % LINHA 3: Traversal (Trocando coluna 1 e 2)
+            \rotatebox{90}{\tiny{\textbf{(d) Caminho}}} &
+            \includegraphics[width=0.22\linewidth]{images/nucleon_comparison/data_driven_traversal.png} &
+            \includegraphics[width=0.22\linewidth]{images/nucleon_comparison/context_base_traversal.png} &
+            \includegraphics[width=0.22\linewidth]{images/nucleon_comparison/hilbert_traversal.png} &
+            \includegraphics[width=0.22\linewidth]{images/nucleon_comparison/scanline_traversal.png} \\
+        \end{tabular}
+    \end{minipage}
+    
+    \caption{Comparação visual do método de linearização \textit{data-driven} com
+    demais métodos sobre o corte transversal do dataset Nucleon (a) inspirado por
+    comparação similar em Zhou et al~\cite{zhou:20}.
+    }
+    \label{fig:matrix_comparison_side}
+\end{figure}
+
+% A Figura \ref{fig:matrix_comparison_side} mostra diferentes comparações entre métodos de curvas de preenchimento,
+% são eles Data-Driven, Context-base, Hilbert e Scanline. Todos os métodos foram aplicados sobre o dataset presente na
+% Figura \ref{fig:matrix_comparison_side} (a). Esse dataset consiste de uma única feature com dois máximos próximos um
+% do outro. A linearização do caminho \ref{fig:matrix_comparison_side} (b) tanto no caso Data-Driven quanto no Context-base
+% mostram claramente dois máximos próximos um do outro, o que não acontece para as curvas de preenchimento Hilbert e Scanline,
+% pois são algoritmos que não são data-aware. A principal diferença entre Data-driven e Context-base pode ser observado
+% na Figura \ref{fig:matrix_comparison_side} (c), que mostra as curvas de preenchimento propriamente. Nota-se que para a
+% implementação data-driven, as curvas tendem a ser muito mais sinuosas devido a escolha de seus hiperparâmetros, enquanto
+% a implementação context-base costuma a ter caminhos muito em linha reta. Esse resultado pode ser visto também na implementação
+% de Zhou et al \cite{zhou:20}. Isso acontece, pois na implementação do autor e na minha, em caso de empates na formula
+% de distância presente na Equação \ref{eq:2} durante o algoritmo de Prim, direções tem precedencia entre si. Embora, as
+% implementações difiram nessas precedencias, resultados semelhantes são encontrados.
+
+A Figura \ref{fig:matrix_comparison_side} apresenta a análise comparativa entre o método \textit{data-driven} e as
+abordagens \textit{context-based}, \textit{hilbert} e \textit{scanline} implementados neste trabalho. A avaliação
+foi conduzida sobre um corte transversal do volume \textit{Nucleon} destacado na Figura \ref{fig:matrix_comparison_side}a,
+que consiste de uma única feature com dois máximos locais próximos.
+
+Uma representação da linearização resultante é exibida na linha \textbf{(b)}. Observa-se que tanto a abordagem
+\textit{data-driven} quanto a \textit{context-based} conseguem capturar a semântica dos dados, traduzindo os
+dois picos originais em elevações contínuas e distintas no gráfico. Em contrapartida, as curvas \textit{hilbert}
+e \textit{scanline}, por serem agnósticas aos dados, fragmentam essas estruturas, gerando um sinal oscilatório que
+não reflete diretamente a estrutura do dataset.
+
+A distinção estrutural entre as abordagens guiadas por dados torna-se evidente na visualização do caminho
+percorrido, apresentada na linha \textbf{(d)}:
+
+\begin{itemize}
+    \item Na abordagem \textbf{\textit{context-based}}, o algoritmo minimiza estritamente a
+    diferença de valores destacados na Equação \ref{eq:1}, o que frequentemente resulta em arestas
+    longas e retilíneas que conectam pixels de intensidade similar.
+    \item Na implementação \textbf{\textit{data-driven}}, a introdução do custo de coerência espacial
+    presente na Equação \ref{eq:2} força a curva a ser mais compacta e sinuosa, preenchendo localmente uma região
+    antes de transitar para a próxima.
+\end{itemize}
+
+Este comportamento sinuoso da abordagem \textit{data-driven} e as linhas retilíneas da abordagem \textit{context-based} corroboram
+os resultados apresentados originalmente por Zhou et al. \cite{zhou:20}.
+Vale ressaltar que a formação desses padrões geométricos repetitivos decorre da natureza determinística do
+algoritmo de Prim. Em situações em que múltiplos vizinhos apresentam custo idêntico na Equação \ref{eq:2}, a ordem de
+precedência das direções (norte, sul, leste, oeste) atua como critério de desempate, induzindo a curva em direções preferenciais.
+
+\subsubsection{Análise de Sensibilidade a Hiperparâmetros}
+
+\begin{figure}[htbp]
+    \centering
+    % A minipage define uma "caixa" de 90% da largura da página.
+    % A legenda vai respeitar essa largura, evitando esticar demais.
+    \begin{minipage}{0.93\linewidth} 
+        \centering
+        
+        \setlength{\tabcolsep}{1pt} 
+        \renewcommand{\arraystretch}{0.5} 
+
+        \begin{tabular}{c c c}
+            
+            % --- LINHA 1: NORMAL ---
+            \multicolumn{3}{c}{\footnotesize (a) Normal distribution} \\
+            \noalign{\vspace{2pt}} 
+            \includegraphics[width=0.30\linewidth]{images/sensitivity/normal_a00.png} &
+            \includegraphics[width=0.30\linewidth]{images/sensitivity/normal_a01_b4.png} &
+            \includegraphics[width=0.30\linewidth]{images/sensitivity/normal_a01_b11.png} \\
+            \noalign{\vspace{5pt}} 
+
+            % --- LINHA 2: DELTA ---
+            \multicolumn{3}{c}{\footnotesize (b) Delta sequence} \\
+            \noalign{\vspace{2pt}}
+            \includegraphics[width=0.30\linewidth]{images/sensitivity/delta_a00.png} &
+            \includegraphics[width=0.30\linewidth]{images/sensitivity/delta_a01_b4.png} &
+            \includegraphics[width=0.30\linewidth]{images/sensitivity/delta_a01_b11.png} \\
+            \noalign{\vspace{5pt}}
+
+            % --- LINHA 3: THREE FEATURES ---
+            \multicolumn{3}{c}{\footnotesize (c) Three features} \\
+            \noalign{\vspace{2pt}}
+            \includegraphics[width=0.30\linewidth]{images/sensitivity/three_a00.png} &
+            \includegraphics[width=0.30\linewidth]{images/sensitivity/three_a01_b4.png} &
+            \includegraphics[width=0.30\linewidth]{images/sensitivity/three_a01_b11.png} \\
+            \noalign{\vspace{5pt}}
+
+            % --- LINHA 4: SKEW ---
+            \multicolumn{3}{c}{\footnotesize (d) Skew normal distribution} \\
+            \noalign{\vspace{2pt}}
+            \includegraphics[width=0.30\linewidth]{images/sensitivity/skew_a00.png} &
+            \includegraphics[width=0.30\linewidth]{images/sensitivity/skew_a01_b4.png} &
+            \includegraphics[width=0.30\linewidth]{images/sensitivity/skew_a01_b11.png} \\
+            \noalign{\vspace{5pt}}
+
+            % --- LEGENDA DA TABELA ---
+            \begin{tabular}{c} \footnotesize $\alpha=0.0$ \\ \footnotesize (\textit{Context-based}) \end{tabular} &
+            \footnotesize $\alpha=0.1, \beta=4$ &
+            \footnotesize $\alpha=0.1, \beta=11$ \\
+            
+        \end{tabular}
+
+        % A legenda agora está presa dentro da minipage de 0.9\linewidth
+        \caption{Análise de sensibilidade aos hiperparâmetros sobre os padrões sintéticos de Köpp e Weinkauf \cite{KoeppWeinkauf2022_TMTM} presentes na Figura \ref{fig:koepp_images}. As colunas evidenciam o impacto das variações de $\alpha$ e $\beta$ na linearização resultante.}        \label{fig:sensitivity_full}
+        
+    \end{minipage}
+\end{figure}
+
+A Figura \ref{fig:sensitivity_full} destaca o impacto de alterações nos hiperparâmetros da Equação \ref{eq:2} do
+método \textit{data-driven}. Diferentemente das limitações discutidas por Köpp e Weinkauf
+\cite{KoeppWeinkauf2022_TMTM}, nota-se que a abordagem \textit{data-driven} gera linearizações bem distintas entre
+si, o que indica sua capacidade de diferenciar tais distribuições. É perceptível também que o aumento do
+hiperparâmetro $\alpha$ induz uma maior segmentação na linearização resultante, pois força a curva a percorrer a
+imagem em blocos. Em especial, nota-se que a capacidade de distinguir o número de estruturas em
+\ref{fig:sensitivity_full}(c) é gradativamente atenuada ao se aumentarem os valores dos hiperparâmetros,
+visto que a combinação de $\alpha$ e $\beta$ pode fragmentar uma mesma estrutura em múltiplos segmentos do caminho.
+
+\FloatBarrier
+\subsubsection{Avaliação Quantitativa via Autocorrelação}
+% Para mensurar a autocorrelação foi tomado como conjunto de dados 10 cortes transversais de cada dataset do
+% \textit{Open SciVis} presentes na Tabela \ref{tab:openscivis} bem como 10 cortes transversais das animações
+% criadas neste trabalho destacados na Figura \ref{fig:moving_frames}. Para todos os experimentos a seguir,
+% foi mantido um valor fixo de $\beta$, buscando variar apenas o hiperparâmetro $\alpha$. Foi calculado
+% ambas as métricas de autocorrelação de dados e radial explicadas anteriormente para cada imagem descrita acima
+% para diferentes configurações e calculado a média.
+
+Para a avaliação quantitativa da autocorrelação, estabeleceu-se um conjunto de dados composto por 10 cortes
+transversais de cada volume do \textit{Open SciVis} presentes na Tabela \ref{tab:openscivis}, somados a 10 quadros das animações
+sintéticas apresentadas na Figura \ref{fig:moving_frames}. Nos experimentos subsequentes, manteve-se o valor de
+$\beta$ fixo, variando-se exclusivamente o hiperparâmetro $\alpha$. Para cada imagem selecionada, foram computadas
+as métricas de autocorrelação de dados e radial, obtendo-se a média global dos resultados para as diferentes
+configurações avaliadas.
+
+\begin{figure}[htbp]
+    \centering
+    
+    % --- CONFIGURAÇÃO (a): Autocorrelação de DADOS ---
+    \begin{subfigure}{0.85\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/autocorrelation/data_alphas.png}
+        \caption{Média de Autocorrelação de Dados}
+    \end{subfigure}
+    
+    % Espaço vertical entre as imagens
+    \par\bigskip 
+    
+    % --- CONFIGURAÇÃO (b): Autocorrelação RADIAL ---
+    \begin{subfigure}{0.85\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/autocorrelation/radial_alphas.png}
+        \caption{Média de Autocorrelação Radial}
+    \end{subfigure}
+    
+    \caption{Impacto da variação de $\alpha$ na autocorrelação média normalizada. (a) A métrica de dados avalia a
+    continuidade das intensidades. (b) A métrica radial avalia a preservação da vizinhança espacial.}
+    \label{fig:autocorrelation_alpha_results}
+\end{figure}
+
+
+\begin{figure}[htbp]
+    \centering
+    
+    % --- COMPARAÇÃO (a): Autocorrelação de DADOS ---
+    \begin{subfigure}{0.85\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/autocorrelation/data_algorithms.png}
+        \caption{Média de Autocorrelação de Dados}
+    \end{subfigure}
+    
+    \par\bigskip 
+    
+    % --- COMPARAÇÃO (b): Autocorrelação RADIAL ---
+    \begin{subfigure}{0.85\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/autocorrelation/radial_algorithms.png}
+        \caption{Média de Autocorrelação Radial}
+    \end{subfigure}
+    
+    \caption{Comparação da autocorrelação média normalizada entre as abordagens \textit{data-driven},
+    \textit{hilbert} e \textit{scanline}. (a) A métrica de dados avalia a
+    continuidade das intensidades. (b) A métrica radial avalia a preservação da vizinhança espacial.}
+    \label{fig:autocorrelation_algorithms_results}
+\end{figure}
+
+% Os resultados comparativos dessa avaliação são apresentados na Figura \ref{fig:autocorrelation_alpha_results} e 
+% \ref{fig:autocorrelation_algorithms_results}.
+% Os gráficos da Figura \ref{fig:autocorrelation_alpha_results} ilustram o comportamento médio das curvas em
+% relação ao deslocamento, permitindo contrastar a preservação da coerência dos dados (a) versus a
+% coerência espacial geométrica (b). Nota-se o \textit{trade-off} do hiperparâmetro $\alpha$, que quanto maior
+% menor é a autocorrelação de dados e maior é a autocorrelação radial. É perceptível também que especialmente
+% para $\alpha = 1$ possui métricas terríveis para ambas autocorrelações. Isso acontece pois nesse caso extremo,
+% o método \textit{data-driven} deixa de ser guiado pelo dado na imagem, se importando exclusivamente com o fator
+% espacial da Equação \ref{eq:2}. Nesse caso, a curva resultante se aproxima do algoritmo \textit{scanline}, repetindo
+% o mesmo padrão em blocos.
+
+% Por sua vez, a Figura \ref{fig:autocorrelation_algorithms_results} compara como a abordagem \textit{data-driven}
+% se compara contra as abordagens \textit{hilbert} e \textit{scanline} para o valor fixo de $\alpha = 0.1$ nas métricas
+% de coerência dos dados (a) e a de coerência espacial geométrica (b). Os resultados obtidos são semelhantes aos descritos
+% por Zhout et al. \cite{zhou:20}, que mostra o \textit{trade-off} de aumentar a autocorrelação radial causa a abordagem
+% \textit{data-driven} ter resultados semelhantes na autocorrelação radial, mesmo havendo uma leve perda da autocorrelação
+% dos dados.
+
+
+Os resultados comparativos dessa avaliação são detalhados nas Figuras \ref{fig:autocorrelation_alpha_results} e
+\ref{fig:autocorrelation_algorithms_results}. 
+
+A Figura \ref{fig:autocorrelation_alpha_results} ilustra o comportamento médio das curvas em relação ao
+deslocamento (\textit{lag}), evidenciando o \textit{trade-off} imposto pelo hiperparâmetro $\alpha$, cujo
+incremento reduz a autocorrelação de dados ao passo que amplia a autocorrelação radial. Observa-se, contudo,
+uma degradação acentuada nas métricas para o caso limite de $\alpha = 1$. Isso ocorre pois, neste extremo, o
+método negligencia o termo dos dados em favor do termo puramente espacial da Equação \ref{eq:2}, o que
+aproxima o comportamento da curva ao do algoritmo \textit{scanline} ao percorrer a imagem em blocos rígidos.
+
+Por sua vez, a Figura \ref{fig:autocorrelation_algorithms_results} confronta a abordagem \textit{data-driven}
+para o valor fixo $\alpha = 0.1$ com as curvas de hilbert e \textit{scanline}. Os resultados
+corroboram as observações de Zhou et al. \cite{zhou:20}, pois nota-se que o ganho na coerência espacial
+aproxima o método proposto do desempenho da curva de hilbert, ainda que isso acarrete uma leve penalidade
+na autocorrelação de dados.
+
+\FloatBarrier
+\subsection{Avaliação de Animação}
+
+% O resultado final do processamento espaço-temporal consiste em uma imagem 2D. Nela, é representado verticalmente o espaço de
+% cada quadro linearizado, enquanto o eixo horizontal representa o tempo. Assim, a imagem resultante tem resolução $m \times n$, onde $m$ representa
+% o número de pixels em cada quadro e $n$ o número de instantes de tempo.
+% As avaliações dos alinhamentos temporais de cada animação gerada destacada na Figura \ref{fig:moving_frames} 
+% são validadas visualmente. Para isso, foram feitos comparações entre os alinhamentos gerados para os
+% valores de $\alpha = 0.0$
+% e $\alpha = 0.1$, enquanto alterna a estratégia de alinhamento adotada e mantém um valor fixo para o hiperparâmetro $\beta$.
+
+O resultado do processamento espaço-temporal constitui uma imagem 2D, onde o eixo vertical corresponde ao espaço
+linearizado de cada quadro e o eixo horizontal representa a evolução temporal. A resolução final é dada por
+$m \times n$, sendo $m$ o número total de pixels por quadro e $n$ a quantidade quadros.
+
+A eficácia dos alinhamentos temporais para as animações da Figura \ref{fig:moving_frames} foi validada visualmente.
+A análise comparativa confronta os resultados obtidos para $\alpha = 0.0$ e $\alpha = 0.1$ sob diferentes estratégias
+de alinhamento (Sem alinhamento, Normas L1 e L2), mantendo-se fixo o hiperparâmetro $\beta$.
+
+\begin{figure}[htbp]
+    \centering
+    
+    % --- CABEÇALHO DAS COLUNAS ---
+    \footnotesize
+    \makebox[0.32\linewidth]{\textbf{Sem Alinhamento}} \hfill
+    \makebox[0.32\linewidth]{\textbf{L1-norm}} \hfill
+    \makebox[0.32\linewidth]{\textbf{L2-norm}}
+    \par\smallskip
+
+    % --- (a) ALPHA = 0.0 ---
+    \begin{subfigure}{\linewidth}
+        \centering
+        \includegraphics[width=0.32\linewidth]{images/animations/moving_normal_00_none.png} \hfill
+        \includegraphics[width=0.32\linewidth]{images/animations/moving_normal_00_l1_norm.png} \hfill
+        \includegraphics[width=0.32\linewidth]{images/animations/moving_normal_00_l2_norm.png}
+        \caption{$\alpha = 0.0$ (\textit{context-based})}
+    \end{subfigure}
+    
+    \par\bigskip 
+
+    % --- (b) ALPHA = 0.1 ---
+    \begin{subfigure}{\linewidth}
+        \centering
+        \includegraphics[width=0.32\linewidth]{images/animations/moving_normal_01_none.png} \hfill
+        \includegraphics[width=0.32\linewidth]{images/animations/moving_normal_01_l1_norm.png} \hfill
+        \includegraphics[width=0.32\linewidth]{images/animations/moving_normal_01_l2_norm.png}
+        \caption{$\alpha = 0.1$ (\textit{data-driven})}
+    \end{subfigure}
+
+    \caption{Linearizações para a animação da Distribuição Normal visualizada na Figura \ref{subfig:moving_normal}.}
+    \label{fig:anim_moving_normal}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    
+    % --- CABEÇALHO DAS COLUNAS ---
+    \footnotesize
+    \makebox[0.32\linewidth]{\textbf{Sem Alinhamento}} \hfill
+    \makebox[0.32\linewidth]{\textbf{L1-norm}} \hfill
+    \makebox[0.32\linewidth]{\textbf{L2-norm}}
+    \par\smallskip
+
+    % --- (a) ALPHA = 0.0 ---
+    \begin{subfigure}{\linewidth}
+        \centering
+        \includegraphics[width=0.32\linewidth]{images/animations/two_features_00_none.png} \hfill
+        \includegraphics[width=0.32\linewidth]{images/animations/two_features_00_l1_norm.png} \hfill
+        \includegraphics[width=0.32\linewidth]{images/animations/two_features_00_l2_norm.png}
+        \caption{$\alpha = 0.0$ (\textit{context-based})}
+    \end{subfigure}
+    
+    \par\bigskip 
+
+    % --- (b) ALPHA = 0.1 ---
+    \begin{subfigure}{\linewidth}
+        \centering
+        \includegraphics[width=0.32\linewidth]{images/animations/two_features_01_none.png} \hfill
+        \includegraphics[width=0.32\linewidth]{images/animations/two_features_01_l1_norm.png} \hfill
+        \includegraphics[width=0.32\linewidth]{images/animations/two_features_01_l2_norm.png}
+        \caption{$\alpha = 0.1$ (\textit{data-driven})}
+    \end{subfigure}
+
+    \caption{Linearizações para a animação de Duas Distribuições visualizada na Figura \ref{subfig:moving_two}.}
+    \label{fig:anim_two_features}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    
+    % --- CABEÇALHO DAS COLUNAS ---
+    \footnotesize
+    \makebox[0.32\linewidth]{\textbf{Sem Alinhamento}} \hfill
+    \makebox[0.32\linewidth]{\textbf{L1-norm}} \hfill
+    \makebox[0.32\linewidth]{\textbf{L2-norm}}
+    \par\smallskip
+
+    % --- (a) ALPHA = 0.0 ---
+    \begin{subfigure}{\linewidth}
+        \centering
+        \includegraphics[width=0.32\linewidth]{images/animations/expanding_ring_00_none.png} \hfill
+        \includegraphics[width=0.32\linewidth]{images/animations/expanding_ring_00_l1_norm.png} \hfill
+        \includegraphics[width=0.32\linewidth]{images/animations/expanding_ring_00_l2_norm.png}
+        \caption{$\alpha = 0.0$ (\textit{context-based})}
+    \end{subfigure}
+    
+    \par\bigskip 
+
+    % --- (b) ALPHA = 0.1 ---
+    \begin{subfigure}{\linewidth}
+        \centering
+        \includegraphics[width=0.32\linewidth]{images/animations/expanding_ring_01_none.png} \hfill
+        \includegraphics[width=0.32\linewidth]{images/animations/expanding_ring_01_l1_norm.png} \hfill
+        \includegraphics[width=0.32\linewidth]{images/animations/expanding_ring_01_l2_norm.png}
+        \caption{$\alpha = 0.1$ (\textit{data-driven})}
+    \end{subfigure}
+
+    \caption{Linearizações para a animação do Anel em Expansão visualizada na Figura \ref{subfig:expanding_ring}.}
+    \label{fig:anim_expanding_ring}
+\end{figure}
+
+\FloatBarrier
+
+% Nas Figuras \ref{fig:anim_moving_normal}, \ref{fig:anim_two_features} e \ref{fig:anim_expanding_ring} estão as imagens
+% resultantes para cada técnica de alinhamento e configuração do hiperparâmetro $\alpha$. É perceptível que independente
+% da configuração aplicado ao \textit{dataset}, a técnica \textit{data-driven} fragmenta as
+% \textit{features} presente nos dados. Em especial, observa-se que aumentar o fator espacial causa também um aumento
+% nessa fragmentação. Assim como apontado por Köpp e Weinkauf \cite{KoeppWeinkauf2022_TMTM}, pode ser observado na
+% Figura \ref{fig:anim_two_features} que em todas as configurações não é possível inferir pela linearização
+% a quantidade de \textit{features} presentes nos dados devido a essa fragmentação.
+
+As Figuras \ref{fig:anim_moving_normal}, \ref{fig:anim_two_features} e \ref{fig:anim_expanding_ring} apresentam as imagens
+resultantes para cada configuração avaliada. É perceptível que, independentemente da técnica aplicada, a abordagem
+\textit{data-driven} tende a fragmentar as \textit{features} presentes nos dados, efeito que se intensifica com o
+aumento do termo de regularização espacial $\alpha$.
+
+Este comportamento corrobora as observações de Köpp e Weinkauf \cite{KoeppWeinkauf2022_TMTM}, que apontam uma limitação
+de que curvas de preenchimento de espaço não garantem a integridade dos objetos. Isso é evidenciado
+na Figura \ref{fig:anim_two_features}, onde a fragmentação excessiva torna impossível inferir visualmente a quantidade
+de \textit{features} existentes na animação.
+
+% Por outro lado, as Figuras \ref{fig:anim_moving_normal} e \ref{fig:anim_expanding_ring} possuem apenas uma \textit{feature}
+% de interesse em cada quadro. Nesses casos, mesmo com o aumento do fator espacial $\alpha$ da Equação \ref{eq:2}, as imagens
+% espaço-temporais geradas representam de maneira coerente as animações originais.
+
+Em contrapartida, as Figuras \ref{fig:anim_moving_normal} e \ref{fig:anim_expanding_ring} são cenários que contêm apenas uma
+estrutura de interesse. Nestes casos, as imagens espaço-temporais geradas preservam a coerência da animação original, mesmo
+sob maior influência do fator espacial $\alpha$ da Equação \ref{eq:2}.
+
+Além disso, é importante notar que cada quadro da animação representa um circuito hamiltoniano fechado. Dessa forma,
+aplicar uma mesma rotação cíclica nos quadros preserva a coerência do alinhamento resultante da mesma maneira. Essa
+propriedade é demonstrada na Figura \ref{fig:compare_expanding_ring}, onde uma versão rotacionada do resultado
+obtido é comparada diretamente com o padrão da literatura reportado por Köpp e Weinkauf \cite{KoeppWeinkauf2022_TMTM}.
+
+\begin{figure}[htbp]
+    \centering
+    
+    % --- IMAGEM 1 (Esquerda) ---
+    % Mudei [b] para [c] para alinhar pelo centro verticalmente
+    \begin{subfigure}[c]{0.60\linewidth}
+        \centering
+        % Se quiser forçar que tenham a mesma altura visual, use height=5cm (exemplo)
+        % mas keepaspectratio garante que não distorça.
+        \includegraphics[width=\linewidth]{images/animations/rotated_expanding_ring_00_l2_norm.png}
+        \caption{Rotação do resultado L2-norm da Figura \ref{fig:anim_expanding_ring}}
+        \label{subfig:my_rotated_ring}
+    \end{subfigure}
+    \hfill % Espaço elástico no meio
+    % --- IMAGEM 2 (Direita) ---
+    % Mudei [b] para [c] aqui também
+    \begin{subfigure}[c]{0.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/animations/expanding_ring_kopp.png}
+        \caption{Referência de Köpp e Weinkauf \cite{KoeppWeinkauf2022_TMTM}}
+        \label{subfig:kopp_ring}
+    \end{subfigure}
+    
+    \caption{Comparação visual entre o resultado rotacionado do método proposto (a) e o resultado reportado na literatura (b) para o cenário do Anel em Expansão.}
+    \label{fig:compare_expanding_ring}
+\end{figure}
+
+\FloatBarrier
+\subsection{Tempos de execução}
+% Para medir o tempo de execução, foi calculado a média dos resultados para cada experimento depois de um total de $20$ execuções.
+% Nessas medições, o conjunto de imagem de teste foi obtido de maneira randomica.
+% O primeiro experimento na Figura \ref{fig:execution_time_core} trata de avaliar os custos de tempo associados a gerar o caminho
+% linearizado para uma única imagem. No eixo horizontal tem-se o número de pixels da imagem e no eixo vertical o tempo de
+% execução em milisegundos. Suas legendas são explicadas a seguir:
+
+Para avaliar o desempenho computacional, calculou-se a média dos tempos de execução após $20$ repetições para
+cada experimento. Nessas medições, os conjuntos de imagens de teste foram gerados de maneira aleatória. O
+primeiro experimento, apresentado na Figura \ref{fig:execution_time_core}, avalia os custos temporais associados
+à geração do caminho linearizado para uma única imagem. O gráfico relaciona o número de pixels da imagem no
+eixo horizontal com o tempo de execução em milissegundos no eixo vertical. As legendas são detalhadas a seguir:
+
+\begin{itemize}
+    \item \textbf{\textit{C++ core algorithm}:} Custo computacional exclusivo da execução do algoritmo de Prim sobre a imagem;
+    \item \textbf{\textit{Pybind interface overhead}:} Custo de tempo para pré-processar a entrada e adequá-la ao formato da implementação;
+    \item \textbf{\textit{Python overhead}:} Custo adicional referente à mudança de contexto entre as linguagens de programação.
+\end{itemize}
+
+O que pode ser observado pela Figura \ref{fig:execution_time_core} é que o principal custo de toda a execução está no processamento
+da imagem durante o algoritmo de Prim, o que indica que não existem perdas de performance significativas ao adotar a biblioteca Pybind
+para expor a implementação de C++ para Python.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.80\textwidth]{images/execution_time_core_algorithm.png}
+    \caption{Tempo de execução para calcular o caminho hamiltoniano de uma imagem única,
+    discriminando os custos entre C++, Pybind e Python}
+    \label{fig:execution_time_core}
+\end{figure}
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.80\textwidth]{images/execution_time_aligment_strategy.png}
+    \caption{Impacto do aumento do número de pixels no tempo de execução
+    para diferentes estratégias de alinhamento}
+    \label{fig:execution_time_align}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.80\textwidth]{images/execution_time_aligment_strategy_frame.png}
+    \caption{Impacto do aumento do número de quadros no tempo de execução
+    para diferentes estratégias de alinhamento}
+    \label{fig:execution_time_align_frame}
+\end{figure}
+
+% As Figuras \ref{fig:execution_time_align} e \ref{fig:execution_time_align_frame} medem o tempo de execução total causados pela
+% estratégia de alinhamento sobre diferentes abordagens. Na Figura \ref{fig:execution_time_align} tem-se um volume de dados
+% com apenas dois quadros, enquanto varia-se na horizontal o número de pixels em cada um desses quadros. Observa-se nessa imagem
+% a complexidade da estratégia de alinhamento \textit{L1-norm}, que possui complexidade quadrática no número de pixels, enquanto
+% a estratégia \textit{L2-norm} introduz pouco custo adicional, pois tem a mesma complexidade de execução do algoritmo de Prim.
+
+As Figuras \ref{fig:execution_time_align} e \ref{fig:execution_time_align_frame} avaliam o tempo de execução total
+decorrente da estratégia de alinhamento escolhida. Na Figura \ref{fig:execution_time_align},
+considera-se um volume de dados com apenas dois quadros, variando-se o número de pixels em cada um deles.
+Observa-se o elevado custo da estratégia \textit{L1-norm}, que exibe complexidade quadrática em relação ao
+número de pixels, enquanto a estratégia \textit{L2-norm} introduz pouco custo adicional, pois possui a mesma
+ordem de complexidade do algoritmo de Prim.
+
+% Por sua vez, na Figura \ref{fig:execution_time_align_frame} se mantem fixo o número de pixels em cada quadro em $32 \times 32$,
+% enquanto varia o número total de quadros na horizontal. Observa-se que as estratégias são lineares no número de quadros, pois elas atuam de maneira
+% independente em cada quadro da animação.
+
+Por sua vez, na Figura \ref{fig:execution_time_align_frame}, mantém-se fixo o número de pixels por quadro em
+$32 \times 32$, variando-se o número total de quadros. Observa-se que as estratégias apresentam comportamento
+linear em relação à quantidade de quadros, uma vez que o processamento ocorre de maneira independente para
+cada quadro da animação.
+
+\FloatBarrier
 \section{Conclusão}
 
 % \section{General Information}
@@ -477,8 +1252,8 @@ O código-fonte desenvolvido encontra-se disponível publicamente no repositóri
 % before each reference. The first line of each reference should not be
 % indented, while the subsequent should be indented by 0.5 cm.
 
-%\printbibliography
-\bibliographystyle{sbc}
-\bibliography{sbc-template}
+\printbibliography
+% \bibliographystyle{sbc}
+% \bibliography{sbc-template}
 
 \end{document}
