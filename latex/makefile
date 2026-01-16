@@ -1,9 +1,9 @@
 pdf:
 	pdflatex sbc-template.tex
-	bibtex sbc-template
+	biber sbc-template
 	pdflatex  sbc-template.tex
 	pdflatex  sbc-template.tex
 
 
 clean:
-	rm -f *~ *.log *.aux *.dvi *.bbl *.blg *.cb *.dep sbc-template.pdf
+	rm -f *~ *.log *.aux *.dvi *.bbl *.blg *.cb *.dep *.bcf *.run.xml sbc-template.pdf
